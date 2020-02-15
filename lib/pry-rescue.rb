@@ -103,7 +103,11 @@ class PryRescue
     # @param [Exception] e  The raised exception
     def phantom_load_raise?(e)
       bindings = e.instance_variable_get(:@rescue_bindings)
-      bindings.any? && bindings.first.eval("__FILE__") == __FILE__
+      return unless bindings.any?
+      
+      b = bindings.first
+      file = RUBY_VERSION >= '2.7.0' ? b.source_location[0] : b.eval("__FILE__")
+      file == __FILE__
     end
 
     # When using pry-stack-explorer we want to start the rescue session outside of gems
@@ -112,8 +116,9 @@ class PryRescue
     # @param [Array<Bindings>] bindings  All bindings
     # @return [Fixnum]  The offset of the first binding of user code
     def initial_frame(bindings)
-      bindings.each_with_index do |binding, i|
-        return i if user_path?(binding.eval("__FILE__"))
+      bindings.each_with_index do |b, i|
+        file = RUBY_VERSION >= '2.7.0' ? b.source_location[0] : b.eval("__FILE__")
+        return i if user_path?(file)
       end
 
       0
@@ -170,7 +175,8 @@ class PryRescue
     def without_bindings_below_raise(bindings)
       return bindings if bindings.size <= 1
       bindings.drop_while do |b|
-        b.eval("__FILE__") == File.expand_path("../pry-rescue/core_ext.rb", __FILE__)
+        file = RUBY_VERSION >= '2.7.0' ? b.source_location[0] : b.eval("__FILE__")
+        file == File.expand_path("../pry-rescue/core_ext.rb", __FILE__)
       end.drop_while do |b|
         Interception == b.eval("self")
       end
